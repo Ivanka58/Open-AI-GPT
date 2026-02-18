@@ -45,3 +45,5 @@ integrations = ["javascript_openai_ai_integrations:2.0.0"]
 
 [userenv.shared]
 TELEGRAM_BOT_TOKEN = "8254798279:AAFtyFhVOkX1SlEanCl7Ozc0h9hGa8L_Wgg"
+ADMIN_ID = "6749286679"
+VIP_PASSWORD = "040111"
