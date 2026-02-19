@@ -30,17 +30,20 @@ export async function setupBot() {
     if (ctx.from) {
       const telegramId = ctx.from.id.toString();
       let user = await storage.getUser(telegramId);
+      
+      const isAdmin = telegramId === process.env.ADMIN_ID;
+
       if (!user) {
         user = await storage.createUser({
           telegramId,
           username: ctx.from.username,
-          isVip: false, // Default not VIP
+          isVip: isAdmin, // Automatically grant VIP to admin
         });
+      } else if (isAdmin && !user.isVip) {
+        // Ensure admin always has VIP even if they were added before ADMIN_ID was set
+        user = await storage.updateUserVipStatus(telegramId, true);
       }
-      // Update username if changed
-      if (user.username !== ctx.from.username && ctx.from.username) {
-        // We could update it here, but keeping it simple for now
-      }
+      
       ctx.state.user = user;
     }
     return next();
@@ -48,7 +51,9 @@ export async function setupBot() {
 
   bot.command("start", async (ctx) => {
     const user = ctx.state.user;
-    if (user.isVip) {
+    const isAdmin = ctx.from?.id.toString() === process.env.ADMIN_ID;
+
+    if (user.isVip || isAdmin) {
       await ctx.reply(
         "Привет! Если ты видишь это сообщение, значит ты избранный, жми кнопку ниже чтобы начать.",
         Markup.keyboard([["Начать диалог"]]).resize()
@@ -66,9 +71,6 @@ export async function setupBot() {
     if (userId === process.env.ADMIN_ID) {
         await ctx.reply("Введи пароль:");
         adminState[userId] = { step: 'password' };
-    } else {
-        // Silent fail or standard response? User didn't specify behavior for non-admins trying /VIP
-        // But logic implies only admin knows about it or it checks ID first.
     }
   });
 
