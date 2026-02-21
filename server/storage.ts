@@ -10,6 +10,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserVipStatus(telegramId: string, isVip: boolean): Promise<User>;
   updateUserVipStatusByUsername(username: string, isVip: boolean): Promise<User | undefined>;
+  getGlobalStats(): Promise<{ totalUsers: number; vipUsers: number }>;
+  getAllVips(): Promise<User[]>;
 
   // Message Operations
   createMessage(message: InsertMessage): Promise<Message>;
@@ -51,6 +53,19 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.username, cleanUsername))
       .returning();
     return user;
+  }
+
+  async getGlobalStats(): Promise<{ totalUsers: number; vipUsers: number }> {
+    const allUsers = await db.select().from(users);
+    const vipUsers = allUsers.filter(u => u.isVip).length;
+    return {
+      totalUsers: allUsers.length,
+      vipUsers
+    };
+  }
+
+  async getAllVips(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.isVip, true));
   }
 
   async createMessage(insertMessage: InsertMessage): Promise<Message> {

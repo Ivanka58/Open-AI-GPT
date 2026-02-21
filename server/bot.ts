@@ -15,7 +15,10 @@ const openai = new OpenAI({
     baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
 });
 
-const adminState: Record<string, { step: 'password' | 'username' }> = {};
+const adminState: Record<string, { 
+    step: 'password' | 'username' | 'vipall_password' | 'remove_vip_username' | 'remove_vip_password',
+    targetUsername?: string 
+}> = {};
 
 const ADMIN_ID = process.env.ADMIN_ID;
 const VIP_PASSWORD = process.env.VIP_PASSWORD || "secret123";
@@ -73,6 +76,31 @@ export async function setupBot() {
         await ctx.reply("Введи пароль:");
         adminState[userId] = { step: 'password' };
     }
+  });
+
+  bot.command("stats", async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (userId === process.env.ADMIN_ID) {
+        const stats = await storage.getGlobalStats();
+        await ctx.reply(`Количество всех пользователей: ${stats.totalUsers}\nVIP пользователей: ${stats.vipUsers}`);
+    }
+  });
+
+  bot.command("VIPall", async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (userId === process.env.ADMIN_ID) {
+        await ctx.reply("Введи пароль для доступа к списку VIP:");
+        adminState[userId] = { step: 'vipall_password' };
+    }
+  });
+
+  bot.action("remove_vip_action", async (ctx) => {
+    const userId = ctx.from?.id.toString();
+    if (userId === process.env.ADMIN_ID) {
+        await ctx.reply("Введите юзернейм пользователя, у которого нужно забрать VIP (без @):");
+        adminState[userId] = { step: 'remove_vip_username' };
+    }
+    await ctx.answerCbQuery();
   });
 
   bot.command("help", async (ctx) => {
@@ -149,6 +177,51 @@ export async function setupBot() {
                   }
               } else {
                   await ctx.reply(`Пользователь @${targetUsername} не найден в базе. Попросите его нажать /start в боте.`);
+              }
+              delete adminState[userId];
+              return;
+          } else if (state.step === 'vipall_password') {
+              if (text === process.env.VIP_PASSWORD) {
+                  const vips = await storage.getAllVips();
+                  if (vips.length === 0) {
+                      await ctx.reply("Список VIP пуст.");
+                  } else {
+                      const vipList = vips.map(v => `@${v.username || v.telegramId}`).join('\n');
+                      await ctx.reply(`Список всех VIP пользователей:\n\n${vipList}`, Markup.inlineKeyboard([
+                          Markup.button.callback("Забрать VIP", "remove_vip_action")
+                      ]));
+                  }
+              } else {
+                  await ctx.reply("Пароль неверный.");
+              }
+              delete adminState[userId];
+              return;
+          } else if (state.step === 'remove_vip_username') {
+              const targetUsername = text.replace('@', '').trim();
+              const targetUser = await storage.getUserByUsername(targetUsername);
+              if (targetUser && targetUser.isVip) {
+                  adminState[userId] = { step: 'remove_vip_password', targetUsername };
+                  await ctx.reply(`Вы хотите забрать VIP у @${targetUsername}. Введите пароль еще раз для подтверждения:`);
+              } else {
+                  await ctx.reply(`Пользователь @${targetUsername} не найден или не является VIP.`);
+                  delete adminState[userId];
+              }
+              return;
+          } else if (state.step === 'remove_vip_password') {
+              if (text === process.env.VIP_PASSWORD) {
+                  const targetUsername = state.targetUsername!;
+                  const targetUser = await storage.getUserByUsername(targetUsername);
+                  if (targetUser) {
+                      await storage.updateUserVipStatusByUsername(targetUsername, false);
+                      await ctx.reply(`У пользователя @${targetUsername} успешно забран VIP.`);
+                      try {
+                          await bot.telegram.sendMessage(targetUser.telegramId, "Администратор забрал у вас VIP доступ.");
+                      } catch (e) {
+                          console.error(`Failed to notify user ${targetUsername} about VIP removal:`, e);
+                      }
+                  }
+              } else {
+                  await ctx.reply("Пароль неверный. Операция отменена.");
               }
               delete adminState[userId];
               return;
