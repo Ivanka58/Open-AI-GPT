@@ -16,7 +16,7 @@ const openai = new OpenAI({
 });
 
 const adminState: Record<string, { 
-    step: 'password' | 'username' | 'vipall_password' | 'remove_vip_username' | 'remove_vip_password',
+    step: 'password' | 'username' | 'vipall_password' | 'remove_vip_username' | 'remove_vip_password' | 'add_password' | 'add_message',
     targetUsername?: string 
 }> = {};
 
@@ -91,6 +91,14 @@ export async function setupBot() {
     if (userId === process.env.ADMIN_ID) {
         await ctx.reply("Введи пароль для доступа к списку VIP:");
         adminState[userId] = { step: 'vipall_password' };
+    }
+  });
+
+  bot.command("add", async (ctx) => {
+    const userId = ctx.from.id.toString();
+    if (userId === process.env.ADMIN_ID) {
+        await ctx.reply("Введи пароль для рассылки:");
+        adminState[userId] = { step: 'add_password' };
     }
   });
 
@@ -223,6 +231,35 @@ export async function setupBot() {
               } else {
                   await ctx.reply("Пароль неверный. Операция отменена.");
               }
+              delete adminState[userId];
+              return;
+          } else if (state.step === 'add_password') {
+              if (text === process.env.VIP_PASSWORD) {
+                  await ctx.reply("Пароль верный. Введите сообщение для рассылки всем VIP пользователям:");
+                  adminState[userId] = { step: 'add_message' };
+              } else {
+                  await ctx.reply("Пароль неверный.");
+                  delete adminState[userId];
+              }
+              return;
+          } else if (state.step === 'add_message') {
+              const vips = await storage.getAllVips();
+              let successCount = 0;
+              let failCount = 0;
+
+              await ctx.reply(`Начинаю рассылку для ${vips.length} пользователей...`);
+
+              for (const vip of vips) {
+                  try {
+                      await bot.telegram.sendMessage(vip.telegramId, text);
+                      successCount++;
+                  } catch (e) {
+                      console.error(`Failed to send broadcast to ${vip.telegramId}:`, e);
+                      failCount++;
+                  }
+              }
+
+              await ctx.reply(`Рассылка завершена!\nУспешно: ${successCount}\nОшибка: ${failCount}`);
               delete adminState[userId];
               return;
           }
