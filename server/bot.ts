@@ -4,41 +4,47 @@ import { storage } from "./storage";
 import OpenAI from "openai";
 import { type ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
-// Определяем константу для API Telegram с указанием IPv4
-const TELEGRAM_API_ROOT = "https://api.telegram.org/";
+// Определяем URL для Webhook
+const WEBHOOK_URL = `${process.env.APP_URL}/api/webhook`;
 
-if (!process.env.TELEGRAM_BOT_TOKEN) {
-  throw new Error("TELEGRAM_BOT_TOKEN must be set");
-}
+// Telegram-токен
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 
-// Создание экземпляра бота с явным указанием API Root
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!, {
+// Создаём экземпляр Telegram-бота
+const bot = new Telegraf(BOT_TOKEN, {
   telegram: {
-    apiRoot: TELEGRAM_API_ROOT, // Используем IPv4 корень API
+    apiRoot: "https://api.telegram.org/", // Используем IPv4
   },
 });
 
+// Устанавливаем Webhook
+await bot.telegram.setWebhook(`${WEBHOOK_URL}?token=${BOT_TOKEN}`);
+
+// Обрабатываем обновления через Webhook
+bot.use(Telegraf.webhookCallback(WEBHOOK_URL));
+
+// Другие константы и объекты
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+  apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
 const adminState: Record<string, { 
-    step: 'password' | 'username' | 'vipall_password' | 'remove_vip_username' | 'remove_vip_password' | 'add_password' | 'add_message',
+    step: 'password' | 'username' | 'vipall_password' | 'remove_vip_username' | 'remove_vip_password' | 'add_password' | 'add_message', 
     targetUsername?: string 
 }> = {};
 
 const ADMIN_ID = process.env.ADMIN_ID;
 const VIP_PASSWORD = process.env.VIP_PASSWORD || "secret123";
 
-// Auto-restart logic: stop the process every 2 hours
-// Replit's workflow manager will then automatically restart it
-const RESTART_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours
+// Авто-рестарт каждые 2 часа
+const RESTART_INTERVAL = 2 * 60 * 60 * 1000; // 2 часа
 setTimeout(() => {
   console.log("Scheduled restart: stopping bot to trigger workflow auto-restart");
   process.exit(0);
 }, RESTART_INTERVAL);
 
+// Функционал бота
 export async function setupBot() {
   bot.use(async (ctx, next) => {
     if (ctx.from) {
@@ -65,7 +71,7 @@ export async function setupBot() {
   bot.command("start", async (ctx) => {
     const user = ctx.state.user;
     const isAdmin = ctx.from?.id.toString() === process.env.ADMIN_ID;
-
+    
     if (user.isVip || isAdmin) {
       await ctx.reply(
         "Привет! Если ты видишь это сообщение, значит ты избранный, жми кнопку ниже чтобы начать.",
@@ -149,7 +155,7 @@ export async function setupBot() {
   bot.action("clear_history_yes", async (ctx) => {
       const user = ctx.state.user;
       await storage.clearMessages(user.id);
-      await ctx.editMessageText("Ваш диалог стерт.");
+      await ctx.editMessageText("Ваш диалог стёрт.");
   });
 
   bot.action("clear_history_no", async (ctx) => {
@@ -340,7 +346,7 @@ export async function setupBot() {
 
           const completion = await openai.chat.completions.create({
               messages: messagesForAI,
-              model: "gpt-4o", 
+              model: "gpt-4", 
           });
 
           const aiResponse = completion.choices[0].message.content || "Нечего сказать 🤷‍♂️";
