@@ -1,13 +1,22 @@
-
 import { Telegraf, Markup, session } from "telegraf";
 import { message } from "telegraf/filters";
 import { storage } from "./storage";
 import OpenAI from "openai";
 import { type ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
+// Определяем константу для API Telegram с указанием IPv4
+const TELEGRAM_API_ROOT = "https://api.telegram.org/";
+
 if (!process.env.TELEGRAM_BOT_TOKEN) {
   throw new Error("TELEGRAM_BOT_TOKEN must be set");
 }
+
+// Создание экземпляра бота с явным указанием API Root
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!, {
+  telegram: {
+    apiRoot: TELEGRAM_API_ROOT, // Используем IPv4 корень API
+  },
+});
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
 const openai = new OpenAI({
